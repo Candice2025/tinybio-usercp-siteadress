@@ -14,7 +14,7 @@ const {subtotal,discount,total}=cartAmounts(cart,promo),{discount:paidDiscount,t
 function applyPromo(e){e.preventDefault();if(promoInput.trim().toUpperCase()==='WELCOME10'){setPromo('WELCOME10');setPromoError('')}else{setPromoError('This promo code is not valid. Try the demo code WELCOME10.')}}
 function go(n){setStep(n);setCartTip(false);window.scrollTo(0,0)}
 function notify(s){setToast(s);setTimeout(()=>setToast(''),2800)}
-function demo(n){go(n)}
+function demo(n){if(n!==0&&!cart.length&&!purchased.length){setCart([{name:(term.includes('.')?term:term+'.bio'),price:12.99,renew:24.99,years:1,bio:'@candiceqin2002'}]);}go(n)}
 function search(e){e.preventDefault();let q=query.trim().toLowerCase();if(!/^[a-z0-9][a-z0-9.-]{0,62}$/.test(q)){notify('Enter a keyword or site address, such as candiceqin.bio');return;}setBusy(true);setTimeout(()=>{setTerm(q);setBusy(false);setResultsOpen(true)},450)}
 const base=term.split('.')[0],exact=term.includes('.')?term:base+'.bio';
 const domains=[{name:exact,price:12.99,renew:24.99,best:true},...['com','net','me','bio'].map((t,i)=>({name:base+'.'+t,price:[10.99,12.99,8.99,12.99][i],renew:[14.99,16.99,19.99,24.99][i]})).filter(x=>x.name!==exact),{name:base+'.co',unavailable:true}];
