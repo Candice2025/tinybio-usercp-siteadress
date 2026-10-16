@@ -1,62 +1,45 @@
 import React, {useEffect, useRef, useState} from 'react';
 
-const emptyContact = {firstName:'', lastName:'', organization:'', email:'', phone:'', country:'', address1:'', address2:'', city:'', region:'', postalCode:''};
+const emptyContact = {firstName:'', lastName:'', organization:'', email:'', phone:'', extension:'', fax:'', country:'', address1:'', address2:'', city:'', region:'', postalCode:'', label:''};
 const fullName = contact => `${contact.firstName} ${contact.lastName}`;
+const roleLabels = {registrant:'Registrant', administrative:'Administrative contact', technical:'Technical contact', billing:'Billing contact'};
+export const demoContact = {...emptyContact, id:'demo-yuna', firstName:'Yuna', lastName:'Qin', email:'yuna@example.com', phone:'+1 415 555 0100', country:'United States', address1:'123 Example Street', city:'San Francisco', region:'California', postalCode:'94103', label:'Personal', demo:true};
 
 export function ContactSummary({item, appliedCount, onEdit}) {
-  return <div className="contact-setting">
-    <div className="contact-summary-copy">
-      <span className="contact-caption">Registrant contact</span>
-      {item.contact ? <>
-        <strong>{fullName(item.contact)}</strong>
-        <span className="contact-detail">{item.contact.email}</span>
-        {appliedCount > 1 && <small className="contact-scope">Applied to {appliedCount} site addresses in this order</small>}
-      </> : <span className="contact-detail">Set the contact for this registration.</span>}
-    </div>
-    <button type="button" className="outline" aria-label={`${item.contact ? 'Edit' : 'Add'} registrant contact for ${item.name}`} onClick={onEdit}>{item.contact ? 'Edit' : 'Add contact'}</button>
-  </div>;
+  return <div className="contact-setting"><div className="contact-summary-copy"><span className="contact-caption">Site address contacts</span>{item.contact ? <>
+    <strong>{fullName(item.contact)}{item.contact.demo&&<span className="contact-demo-tag">Demo</span>}</strong><span className="contact-detail">{item.contacts?.useSame===false?'Separate contacts by role':'Used for all contact roles'}</span>{appliedCount>1&&<small className="contact-scope">Applied to {appliedCount} site addresses in this order</small>}
+  </>:<span className="contact-detail">Choose a saved contact or add a new address.</span>}</div><button type="button" className="outline" aria-label={`${item.contact?'Edit':'Set'} contacts for ${item.name}`} onClick={onEdit}>{item.contact?'Edit':'Set contacts'}</button></div>;
 }
 
-export default function ContactDialog({item, itemCount, defaultApplyAll, onClose, onSave}) {
-  const dialogRef = useRef(null);
-  const [draft, setDraft] = useState(() => ({...emptyContact, ...item.contact}));
-  const [applyAll, setApplyAll] = useState(defaultApplyAll);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    dialog.showModal();
-    return () => { if (dialog.open) dialog.close(); };
-  }, []);
-  const field = (key, label, options={}) => <label className={options.full ? 'contact-field contact-field-full' : 'contact-field'}>
-    <span>{label}{options.optional && <small>Optional</small>}</span>
-    <input name={key} type={options.type || 'text'} required={!options.optional} pattern={options.optional ? undefined : '.*\\S.*'} autoComplete={options.autoComplete || 'off'} value={draft[key]} placeholder={options.placeholder || ''} maxLength={options.type==='email' ? 254 : 150} onChange={e=>setDraft({...draft, [key]:e.target.value})}/>
-  </label>;
-  return <dialog ref={dialogRef} className="contact-dialog" aria-labelledby="contact-dialog-title" aria-describedby="contact-dialog-description" onCancel={onClose} onClick={e=>{if(e.target===dialogRef.current)onClose();}}>
-    <form onSubmit={e=>{e.preventDefault();onSave(Object.fromEntries(Object.entries(draft).map(([key,value])=>[key,value.trim()])),applyAll);}}>
-      <div className="contact-dialog-header">
-        <div><h2 id="contact-dialog-title">Registrant contact</h2><p id="contact-dialog-description">Contact details for {item.name}</p></div>
-        <button type="button" className="icon-button contact-close" aria-label="Close registrant contact" onClick={onClose}>×</button>
-      </div>
-      <div className="contact-dialog-body">
-        <div className="contact-fields">
-          {field('firstName','First name',{autoComplete:'given-name'})}
-          {field('lastName','Last name',{autoComplete:'family-name'})}
-          {field('organization','Organization',{full:true,optional:true,autoComplete:'organization'})}
-          {field('email','Email',{type:'email',autoComplete:'email',placeholder:'name@example.com'})}
-          {field('phone','Phone',{type:'tel',autoComplete:'tel',placeholder:'+1 415 555 0100'})}
-          <label className="contact-field contact-field-full"><span>Country / Region</span><select name="country" required autoComplete="country-name" value={draft.country} onChange={e=>setDraft({...draft,country:e.target.value})}>
-            <option value="">Select country / region</option>{['United States','China','United Kingdom','Canada','Australia','Germany','Singapore','Japan','Other'].map(country=><option key={country}>{country}</option>)}
-          </select></label>
-          {field('address1','Street address',{full:true,autoComplete:'address-line1'})}
-          {field('address2','Apartment, suite, etc.',{full:true,optional:true,autoComplete:'address-line2'})}
-          {field('city','City',{autoComplete:'address-level2'})}
-          {field('region','State / Province',{optional:true,autoComplete:'address-level1'})}
-          {field('postalCode','ZIP / Postal code',{optional:true,autoComplete:'postal-code'})}
-        </div>
-      </div>
-      <div className="contact-dialog-footer">
-        <label className="contact-apply-all"><input type="checkbox" checked={applyAll} onChange={e=>setApplyAll(e.target.checked)}/><span>Apply to all site addresses in this order <b>({itemCount})</b><small>{applyAll ? 'Saves these details for every item in this order.' : `Only updates ${item.name}.`}</small></span></label>
-        <div className="contact-dialog-actions"><button type="button" className="outline" onClick={onClose}>Cancel</button><button type="submit" className="primary">Save contact</button></div>
-      </div>
-    </form>
-  </dialog>;
+export default function ContactDialog({item,itemCount,defaultApplyAll,savedContacts,defaultContactId,onSaveAddress,onClose,onSave}) {
+  const dialogRef=useRef(null),headingRef=useRef(null);
+  const [view,setView]=useState('selection');
+  const [roles,setRoles]=useState(()=>Object.fromEntries(Object.keys(roleLabels).map(role=>[role,item.contacts?.[role]?.id||item.contact?.id||defaultContactId])));
+  const [useSame,setUseSame]=useState(item.contacts?.useSame!==false),[applyAll,setApplyAll]=useState(defaultApplyAll);
+  const [draft,setDraft]=useState({...emptyContact}),[company,setCompany]=useState(false),[makeDefault,setMakeDefault]=useState(false),[addressRole,setAddressRole]=useState('registrant');
+  const resolved=Object.fromEntries(Object.keys(roleLabels).map(role=>[role,savedContacts.find(contact=>contact.id===roles[useSame?'registrant':role])]));
+  const valid=Object.values(resolved).every(Boolean);
+  useEffect(()=>{const dialog=dialogRef.current;dialog.showModal();return()=>{if(dialog.open)dialog.close();};},[]);
+  useEffect(()=>{headingRef.current?.focus();const body=dialogRef.current?.querySelector('.contact-dialog-body');if(body)body.scrollTop=0;},[view]);
+  const openAddress=role=>{setAddressRole(role);setDraft({...emptyContact});setCompany(false);setMakeDefault(false);setView('address');};
+  const closeOrBack=()=>view==='address'?setView('selection'):onClose();
+  const field=(key,label,options={})=><label className={options.full?'contact-field contact-field-full':'contact-field'}><span>{label}{options.optional&&<small>Optional</small>}</span><input name={key} type={options.type||'text'} required={!options.optional} pattern={options.optional?undefined:'.*\\S.*'} autoComplete={options.autoComplete||'off'} value={draft[key]} placeholder={options.placeholder||''} maxLength={options.type==='email'?254:150} onChange={e=>setDraft({...draft,[key]:e.target.value})}/></label>;
+  const selector=role=>{const contact=savedContacts.find(contact=>contact.id===roles[role]);return <div className="contact-role" key={role}><div className="contact-role-heading"><label htmlFor={'contact-'+role}>{roleLabels[role]}</label><button type="button" className="text-link" onClick={()=>openAddress(role)}>Add new address</button></div><select id={'contact-'+role} value={roles[role]} required onChange={e=>setRoles({...roles,[role]:e.target.value})}><option value="">Select a contact</option>{savedContacts.map(contact=><option value={contact.id} key={contact.id}>{fullName(contact)} · {contact.city}{contact.id===defaultContactId?' · Default':''}{contact.demo?' · Demo':''}</option>)}</select>{contact&&<div className="contact-address-preview"><b>{contact.label}</b><span>{contact.address1}{contact.address2?', '+contact.address2:''}</span><span>{[contact.city,contact.region,contact.postalCode,contact.country].filter(Boolean).join(', ')}</span><span>{contact.email} · {contact.phone}</span></div>}</div>};
+  const saveAddress=e=>{e.preventDefault();const address={...Object.fromEntries(Object.entries(draft).map(([key,value])=>[key,value.trim()])),id:crypto.randomUUID(),organization:company?draft.organization.trim():''};address.label=address.label||`${fullName(address)} · ${address.city}`;onSaveAddress(address,makeDefault);setRoles(current=>({...current,[addressRole]:address.id}));setView('selection');};
+  return <dialog ref={dialogRef} className="contact-dialog" aria-labelledby="contact-dialog-title" aria-describedby="contact-dialog-description" onCancel={e=>{e.preventDefault();closeOrBack();}} onClick={e=>{if(e.target===dialogRef.current)closeOrBack();}}><form onSubmit={view==='address'?saveAddress:e=>{e.preventDefault();if(valid)onSave({...resolved,useSame},applyAll);}}>
+    <div className="contact-dialog-header"><div><h2 id="contact-dialog-title" ref={headingRef} tabIndex={-1}>{view==='address'?'Add new address':item.name}</h2><p id="contact-dialog-description">{view==='address'?'Save an address to use for site address contacts.':'Site address contacts'}</p></div><button type="button" className="icon-button contact-close" aria-label={view==='address'?'Back to contact selection':'Close contact settings'} onClick={closeOrBack}>×</button></div>
+    <div className="contact-dialog-body">{view==='selection'?<>
+      {selector('registrant')}<label className="contact-same-address"><input type="checkbox" checked={useSame} onChange={e=>setUseSame(e.target.checked)}/><span>Use the same address for administrative, technical, and billing contacts</span></label>{!useSame&&<div className="contact-extra-roles">{['administrative','technical','billing'].map(selector)}</div>}<p className="contact-session-note">Saved contacts are available during this demo session.</p>
+    </>:<><div className="contact-fields">
+      {field('firstName','First name',{autoComplete:'given-name'})}{field('lastName','Last name',{autoComplete:'family-name'})}
+      <label className="contact-company contact-field-full"><input type="checkbox" checked={company} onChange={e=>setCompany(e.target.checked)}/><span>This is a company address</span></label>{company&&field('organization','Company name',{full:true,autoComplete:'organization'})}
+      {field('address1','Street address',{full:true,autoComplete:'address-line1'})}{field('address2','Apartment, suite, etc.',{full:true,optional:true,autoComplete:'address-line2'})}
+      <label className="contact-field"><span>Country / Region</span><select name="country" required autoComplete="country-name" value={draft.country} onChange={e=>setDraft({...draft,country:e.target.value})}><option value="">Select country / region</option>{['United States','China','United Kingdom','Canada','Australia','Germany','Singapore','Japan','Other'].map(country=><option key={country}>{country}</option>)}</select></label>
+      {field('region','State / Province',{optional:true,autoComplete:'address-level1'})}{field('city','City',{autoComplete:'address-level2'})}{field('postalCode','ZIP / Postal code',{optional:true,autoComplete:'postal-code'})}
+      {field('email','Email address',{full:true,type:'email',autoComplete:'email',placeholder:'name@example.com'})}{field('phone','Phone number',{full:true,type:'tel',autoComplete:'tel',placeholder:'+1 415 555 0100'})}
+      </div><details className="contact-additional"><summary>Additional contact details</summary><div className="contact-fields">{field('extension','Phone extension',{optional:true})}{field('fax','Fax number',{optional:true,type:'tel'})}</div></details>
+      <div className="contact-address-options"><h3>Save options</h3>{field('label','Address name',{full:true,optional:true,placeholder:'Auto-generated from name and city'})}<label className="contact-same-address"><input type="checkbox" checked={makeDefault} onChange={e=>setMakeDefault(e.target.checked)}/><span>Set as default contact address</span></label></div>
+    </>}</div>
+    <div className="contact-dialog-footer">{view==='selection'&&<div className="contact-save-options"><h3>Save options</h3><label className="contact-apply-all"><input type="checkbox" checked={applyAll} onChange={e=>setApplyAll(e.target.checked)}/><span>Apply these contacts to all site addresses in this order <b>({itemCount})</b><small>{applyAll?'Updates every item in this order.':`Only updates ${item.name}.`}</small></span></label></div>}<div className="contact-dialog-actions"><button type="button" className="outline" onClick={closeOrBack}>Cancel</button><button type="submit" className="primary" disabled={view==='selection'&&!valid}>{view==='address'?'Save address':'Apply'}</button></div></div>
+  </form></dialog>;
 }
